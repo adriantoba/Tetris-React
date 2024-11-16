@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  background-image: url("src/assets/bg.jpg");
+  background-image: url("./assets/bg.jpg");
   background-size: 600px 600px;
   background-position: center;
   background-repeat: repeat;

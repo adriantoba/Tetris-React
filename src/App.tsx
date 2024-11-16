@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createStage, isColliding } from "./utils/gameHelpers";
+
 // Components
 import Stage from "./components/Stage/Stage";
 import TetrisDisplay from "./components/Displays/Display";
@@ -12,6 +13,7 @@ import { usePlayer } from "./hooks/usePlayer";
 import { useStage } from "./hooks/useStage";
 import { useGameStatus } from "./hooks/useGameStatus";
 import { useHighScores } from "./hooks/useHighScore";
+import { useSwipeable } from "react-swipeable";
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<"menu" | "playing" | "end">(
@@ -23,6 +25,9 @@ const App: React.FC = () => {
   const [previousScore, setPreviousScore] = useState(0);
   const [newName, setNewName] = useState("");
   const [openModal, setOpenModal] = useState(false);
+  const touchStartRef = useRef<number | null>(null);
+  const accelerationTimeoutRef = useRef<number | null>(null);
+  const isAcceleratingRef = useRef(false);
 
   const { scores, loading, updateScores, finalizeScore } = useHighScores();
   const { player, updatePlayerPos, resetPlayer, playerRotate, nextPiece } =
@@ -46,12 +51,14 @@ const App: React.FC = () => {
     }
   };
 
+  console.log("Drop Time:", dropTime);
+
   // Game Start Conditions
   const handleStartGame = (): void => {
     {
       if (gameArea.current) gameArea.current.focus();
       setStage(createStage());
-      setDropTime(1000);
+      setDropTime(1200);
       resetPlayer();
       setScore(0);
       setLevel(1);
@@ -83,6 +90,75 @@ const App: React.FC = () => {
     setRows(0);
   };
 
+  // Touch Controls ////////////
+  const resetDropTime = useCallback(() => {
+    setDropTime(1000 / level + 200);
+  }, [level]);
+
+  const accelerateDropTime = useCallback(() => {
+    setDropTime(60);
+  }, []);
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent) => {
+      if (gameOver || paused) return;
+
+      touchStartRef.current = e.timeStamp;
+      accelerationTimeoutRef.current = setTimeout(() => {
+        isAcceleratingRef.current = true;
+        accelerateDropTime();
+      }, 500); // Reduced to 500ms for faster response
+    },
+    [gameOver, paused, accelerateDropTime]
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: React.TouchEvent) => {
+      if (gameOver || paused) return;
+
+      if (accelerationTimeoutRef.current) {
+        clearTimeout(accelerationTimeoutRef.current);
+      }
+
+      const touchDuration = e.timeStamp - (touchStartRef.current || 0);
+
+      if (isAcceleratingRef.current) {
+        isAcceleratingRef.current = false;
+        resetDropTime();
+      } else if (touchDuration < 200) {
+        // Short tap, trigger move down
+        movePlayer(0);
+      }
+
+      touchStartRef.current = null;
+    },
+    [gameOver, paused, resetDropTime, movePlayer]
+  );
+
+  const handlers = useSwipeable({
+    onSwipedLeft: () => {
+      if (!gameOver && !paused) movePlayer(-1);
+    },
+    onSwipedRight: () => {
+      if (!gameOver && !paused) movePlayer(1);
+    },
+    onSwipedUp: () => {
+      if (!gameOver && !paused) playerRotate(stage);
+    },
+    preventScrollOnSwipe: true,
+    trackTouch: true,
+    trackMouse: false,
+  });
+
+  useEffect(() => {
+    return () => {
+      if (accelerationTimeoutRef.current) {
+        clearTimeout(accelerationTimeoutRef.current);
+      }
+      setDropTime(1000 / level + 200);
+    };
+  }, [resetDropTime]);
+  ///////////////////////////
   // Keyboard Controls
   const actions = ({
     keyCode,
@@ -206,7 +282,12 @@ const App: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="flex flex-col sm:flex-row justify-center items-center">
+          <div
+            {...handlers}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            className="flex flex-col sm:flex-row justify-center items-center"
+          >
             <Stage stage={stage} />
           </div>
         </div>
@@ -218,7 +299,7 @@ const App: React.FC = () => {
               isShowing={gameOver ? false : true}
             />
           </div>
-          <div className="flex sm:flex-col flex-wrap items-center justify-center">
+          <div className="sm:flex-col flex-wrap items-center justify-center hidden sm:flex">
             <TetrisDisplay
               currentScore={score}
               previousScore={previousScore}
