@@ -127,7 +127,7 @@ const App: React.FC = () => {
         resetDropTime();
       } else if (touchDuration < 200) {
         // Short tap, trigger move down
-        movePlayer(0);
+        playerRotate(stage);
       }
 
       touchStartRef.current = null;
@@ -246,7 +246,7 @@ const App: React.FC = () => {
       ref={gameArea}
     >
       <div className="flex flex-col sm:flex-row justify-center sm:items-start items-center p-8 sm:p-16">
-        <div className="sm:mr-8">
+        <div {...handlers} className="sm:mr-8">
           <div className="flex justify-between items-center">
             {gameOver ? (
               <div className="flex flex-grow items-center justify-center mx-auto pb-3">
@@ -283,7 +283,6 @@ const App: React.FC = () => {
             )}
           </div>
           <div
-            {...handlers}
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             className="flex flex-col sm:flex-row justify-center items-center"
