@@ -25,7 +25,9 @@ const App: React.FC = () => {
   const [previousScore, setPreviousScore] = useState(0);
   const [newName, setNewName] = useState("");
   const [openModal, setOpenModal] = useState(false);
-  const touchStartRef = useRef<number | null>(null);
+  const touchStartRef = useRef<{ time: number; x: number; y: number } | null>(
+    null
+  );
   const accelerationTimeoutRef = useRef<number | null>(null);
   const isAcceleratingRef = useRef(false);
 
@@ -103,7 +105,12 @@ const App: React.FC = () => {
     (e: React.TouchEvent) => {
       if (gameOver || paused) return;
 
-      touchStartRef.current = e.timeStamp;
+      const touch = e.touches[0];
+      touchStartRef.current = {
+        time: e.timeStamp,
+        x: touch.clientX,
+        y: touch.clientY,
+      };
       accelerationTimeoutRef.current = setTimeout(() => {
         isAcceleratingRef.current = true;
         accelerateDropTime();
@@ -114,25 +121,30 @@ const App: React.FC = () => {
 
   const handleTouchEnd = useCallback(
     (e: React.TouchEvent) => {
-      if (gameOver || paused) return;
+      if (gameOver || paused || !touchStartRef.current) return;
 
       if (accelerationTimeoutRef.current) {
         clearTimeout(accelerationTimeoutRef.current);
       }
 
-      const touchDuration = e.timeStamp - (touchStartRef.current || 0);
+      const touchEnd = e.changedTouches[0];
+      const touchDuration = e.timeStamp - touchStartRef.current.time;
+      const touchDistance = Math.sqrt(
+        Math.pow(touchEnd.clientX - touchStartRef.current.x, 2) +
+          Math.pow(touchEnd.clientY - touchStartRef.current.y, 2)
+      );
 
       if (isAcceleratingRef.current) {
         isAcceleratingRef.current = false;
         resetDropTime();
-      } else if (touchDuration < 200) {
-        // Short tap, trigger move down
+      } else if (touchDuration < 200 && touchDistance < 10) {
+        // Short tap with minimal movement, trigger rotation
         playerRotate(stage);
       }
 
       touchStartRef.current = null;
     },
-    [gameOver, paused, resetDropTime, movePlayer]
+    [gameOver, paused, resetDropTime, playerRotate, stage]
   );
 
   const handlers = useSwipeable({
@@ -142,12 +154,11 @@ const App: React.FC = () => {
     onSwipedRight: () => {
       if (!gameOver && !paused) movePlayer(1);
     },
-    onSwipedUp: () => {
-      if (!gameOver && !paused) playerRotate(stage);
-    },
+    
     preventScrollOnSwipe: true,
     trackTouch: true,
     trackMouse: false,
+    delta: 60,
   });
 
   useEffect(() => {
@@ -286,6 +297,7 @@ const App: React.FC = () => {
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             className="flex flex-col sm:flex-row justify-center items-center"
+            style={{ userSelect: "none", touchAction: "none" }}
           >
             <Stage stage={stage} />
           </div>
